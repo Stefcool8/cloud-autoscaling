@@ -10,9 +10,11 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.test.context.ActiveProfiles
 import java.math.BigDecimal
 import java.time.Duration
 
+@ActiveProfiles("docker")
 class DockerExecutorIntegrationTest : IntegrationTestBase() {
 
     @Autowired

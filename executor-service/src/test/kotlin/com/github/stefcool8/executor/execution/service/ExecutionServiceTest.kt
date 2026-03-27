@@ -13,6 +13,8 @@ import org.mockito.Mock
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import org.mockito.junit.jupiter.MockitoExtension
+import org.springframework.data.domain.PageImpl
+import org.springframework.data.domain.PageRequest
 import org.springframework.http.HttpStatus
 import org.springframework.web.server.ResponseStatusException
 import java.math.BigDecimal
@@ -24,11 +26,14 @@ class ExecutionServiceTest {
     @Mock
     private lateinit var executionRepository: ExecutionRepository
 
+    @Mock
+    private lateinit var remoteExecutorClient: RemoteExecutorClient
+
     @InjectMocks
     private lateinit var executionService: ExecutionService
 
     @Test
-    fun `submitExecution should save to repository and return response`() {
+    fun `submitExecution should save to repository, trigger remote client, and return response`() {
         val request = ExecutionRequest(script = "echo 'test'", cpuCount = BigDecimal("1.5"))
         val mockSavedExecution = Execution(
             id = UUID.randomUUID(),
@@ -37,7 +42,6 @@ class ExecutionServiceTest {
             status = ExecutionStatus.QUEUED
         )
 
-        // What to do when save() is called
         `when`(executionRepository.save(any(Execution::class.java))).thenReturn(mockSavedExecution)
 
         val response = executionService.submitExecution(request)
@@ -47,8 +51,8 @@ class ExecutionServiceTest {
         assertEquals(BigDecimal("1.5"), response.cpuCount)
         assertEquals(ExecutionStatus.QUEUED, response.status)
 
-        // Verify that the repository's save method was actually called exactly once
         verify(executionRepository).save(any(Execution::class.java))
+        verify(remoteExecutorClient).execute(mockSavedExecution)
     }
 
     @Test
@@ -80,5 +84,18 @@ class ExecutionServiceTest {
 
         assertEquals(HttpStatus.NOT_FOUND, exception.statusCode)
         assertTrue(exception.reason!!.contains("not found"))
+    }
+
+    @Test
+    fun `getAllExecutions should return paginated list`() {
+        val pageable = PageRequest.of(0, 10)
+        val mockExecution = Execution(script = "test list", cpuCount = BigDecimal.ONE)
+
+        `when`(executionRepository.findAll(pageable)).thenReturn(PageImpl(listOf(mockExecution)))
+
+        val result = executionService.getAllExecutions(pageable)
+
+        assertEquals(1, result.totalElements)
+        assertEquals("test list", result.content[0].script)
     }
 }

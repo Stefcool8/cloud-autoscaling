@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mockito.`when`
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
+import org.springframework.data.jpa.mapping.JpaMetamodelMappingContext
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
 import org.springframework.test.context.bean.override.mockito.MockitoBean
@@ -24,7 +25,6 @@ import java.util.*
 
 @WebMvcTest(ExecutionController::class)
 class ExecutionControllerTest {
-
     @Autowired
     private lateinit var mockMvc: MockMvc
 
@@ -32,6 +32,9 @@ class ExecutionControllerTest {
 
     @MockitoBean
     private lateinit var executionService: ExecutionService
+
+    @MockitoBean
+    private lateinit var jpaMappingContext: JpaMetamodelMappingContext
 
     @Test
     fun `POST to executions should return 201 Created`() {

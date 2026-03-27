@@ -8,7 +8,7 @@ import org.testcontainers.junit.jupiter.Testcontainers
 
 @SpringBootTest
 @Testcontainers
-@ActiveProfiles("test")
+@ActiveProfiles("docker")
 abstract class IntegrationTestBase {
 
     companion object {

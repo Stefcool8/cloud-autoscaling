@@ -29,6 +29,9 @@ class KubernetesPodInformerTest {
     private val jobName = "exec-$executionId"
     private val podName = "pod-$executionId"
 
+    private val targetNamespace: String
+        get() = client.namespace ?: "default"
+
     private lateinit var mockExecution: Execution
 
     @BeforeEach
@@ -64,7 +67,7 @@ class KubernetesPodInformerTest {
             .endStatus()
             .build()
 
-        client.pods().inNamespace("default").resource(runningPod).create()
+        client.pods().inNamespace(targetNamespace).resource(runningPod).create()
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted {
             verify(executionRepository, atLeastOnce()).save(argThat {
@@ -85,7 +88,7 @@ class KubernetesPodInformerTest {
             .endStatus()
             .build()
 
-        client.pods().inNamespace("default").resource(succeededPod).create()
+        client.pods().inNamespace(targetNamespace).resource(succeededPod).create()
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted {
             verify(executionRepository, atLeastOnce()).save(argThat {
@@ -119,9 +122,8 @@ class KubernetesPodInformerTest {
             .endStatus()
             .build()
 
-        client.pods().inNamespace("default").resource(crashedPod).create()
+        client.pods().inNamespace(targetNamespace).resource(crashedPod).create()
 
-        // The Informer should intercept the ImagePullBackOff and forcefully mark it FAILED
         await().atMost(Duration.ofSeconds(5)).untilAsserted {
             verify(executionRepository, atLeastOnce()).save(argThat {
                 it.status == ExecutionStatus.FAILED &&
