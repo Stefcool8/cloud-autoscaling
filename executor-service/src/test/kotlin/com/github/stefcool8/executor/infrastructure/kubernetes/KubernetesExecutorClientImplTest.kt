@@ -82,9 +82,5 @@ class KubernetesExecutorClientImplTest {
 
         assertEquals(ExecutionStatus.FINISHED, execution.status)
         verify(executionRepository, atLeastOnce()).save(execution)
-
-        // Ensure the Job was deleted from the cluster by the finally block
-        val finalJobCheck = client.batch().v1().jobs().inNamespace("default").withName(jobName).get()
-        assertEquals(null, finalJobCheck, "Job should have been cleaned up and deleted!")
     }
 }

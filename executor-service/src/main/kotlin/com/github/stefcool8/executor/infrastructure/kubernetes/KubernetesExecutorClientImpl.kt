@@ -4,7 +4,6 @@ import com.github.stefcool8.executor.execution.domain.Execution
 import com.github.stefcool8.executor.execution.domain.ExecutionStatus
 import com.github.stefcool8.executor.execution.repository.ExecutionRepository
 import com.github.stefcool8.executor.execution.service.RemoteExecutorClient
-import io.fabric8.kubernetes.api.model.DeletionPropagation
 import io.fabric8.kubernetes.api.model.Quantity
 import io.fabric8.kubernetes.api.model.batch.v1.JobBuilder
 import io.fabric8.kubernetes.client.KubernetesClient
@@ -38,9 +37,11 @@ class KubernetesExecutorClientImpl(
             val job = JobBuilder()
                 .withNewMetadata().withName(jobName).endMetadata()
                 .withNewSpec()
-                .withBackoffLimit(0) // Do not retry if the script fails
+                .withBackoffLimit(0)
+                .withTtlSecondsAfterFinished(30)
                 .withNewTemplate()
                 .withNewSpec()
+                .withAutomountServiceAccountToken(false)
                 .addNewContainer()
                 .withName("alpine-executor")
                 .withImage("alpine:latest")
@@ -83,23 +84,11 @@ class KubernetesExecutorClientImpl(
             }
 
             log.info("Execution ${execution.id} completed with status $finalStatus")
-
         } catch (e: Exception) {
             log.error("System error while running K8s job for execution ${execution.id}", e)
             finalOutput = "System Error: ${e.message}"
             finalStatus = ExecutionStatus.FAILED
         } finally {
-            // Delete the Job (and its pods) so the cluster doesn't fill up
-            try {
-                // DeletionPropagation.BACKGROUND ensures K8s also deletes the Pods created by the Job
-                kubernetesClient.batch().v1().jobs().inNamespace(namespace).withName(jobName)
-                    .withPropagationPolicy(DeletionPropagation.BACKGROUND)
-                    .delete()
-                log.info("Cleaned up Job $jobName")
-            } catch (cleanupEx: Exception) {
-                log.warn("Failed to cleanup K8s Job $jobName", cleanupEx)
-            }
-
             // Save final state to DB
             updateExecutionRecord(execution.id, finalStatus, finalOutput?.trim())
         }
