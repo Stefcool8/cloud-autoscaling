@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.github.stefcool8"
-version = "0.0.1-SNAPSHOT"
+version = "1.0.0"
 description = "executor-service"
 
 java {
@@ -32,6 +32,7 @@ dependencies {
     implementation("com.github.docker-java:docker-java:3.7.0")
     implementation("com.github.docker-java:docker-java-transport-httpclient5:3.7.0")
     implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.2")
+    implementation("io.fabric8:kubernetes-client:7.6.1")
 
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
@@ -41,6 +42,7 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter:1.21.4")
     testImplementation("org.testcontainers:postgresql:1.21.4")
     testImplementation("org.awaitility:awaitility:4.3.0")
+    testImplementation("io.fabric8:kubernetes-server-mock:7.6.1")
 }
 
 kotlin {

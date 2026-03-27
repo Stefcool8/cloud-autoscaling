@@ -10,11 +10,13 @@ import com.github.stefcool8.executor.execution.domain.ExecutionStatus
 import com.github.stefcool8.executor.execution.repository.ExecutionRepository
 import com.github.stefcool8.executor.execution.service.RemoteExecutorClient
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 
 @Component
+@Profile("docker")
 class DockerExecutorClientImpl(
     private val dockerClient: DockerClient,
     private val executionRepository: ExecutionRepository
