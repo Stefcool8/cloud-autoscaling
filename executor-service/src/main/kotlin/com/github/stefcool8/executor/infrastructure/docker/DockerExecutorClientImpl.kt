@@ -52,6 +52,11 @@ class DockerExecutorClientImpl(
                 dockerClient.waitContainerCmd(containerId)
                     .exec(WaitContainerResultCallback())
                     .awaitStatusCode(5, TimeUnit.MINUTES) // Max 5 minutes per job
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt() // Restore the interrupted status
+                log.error("Execution ${execution.id} was interrupted!")
+                dockerClient.killContainerCmd(containerId).exec()
+                -1
             } catch (_: Exception) {
                 log.error("Execution ${execution.id} timed out after 5 minutes!")
                 // Force kill the hanging container

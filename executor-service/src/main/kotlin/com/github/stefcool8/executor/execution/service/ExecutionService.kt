@@ -27,8 +27,6 @@ class ExecutionService(
 
         val savedExecution = executionRepository.save(newExecution)
 
-        // (Future phase: Trigger Kubernetes/Docker here!)
-
         // This hands the task to the "RemoteExec-" thread pool
         remoteExecutorClient.execute(savedExecution)
 

@@ -10,36 +10,36 @@ import io.fabric8.kubernetes.client.KubernetesClient
 import org.slf4j.LoggerFactory
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
-import java.util.concurrent.TimeUnit
 
 @Component
-@Profile("kubernetes") // Only load this bean if the "kubernetes" profile is active
+@Profile("kubernetes")
 class KubernetesExecutorClientImpl(
     private val kubernetesClient: KubernetesClient,
     private val executionRepository: ExecutionRepository
 ) : RemoteExecutorClient {
 
     private val log = LoggerFactory.getLogger(javaClass)
-    private val namespace = "default"
+    private val namespace = kubernetesClient.namespace ?: "default"
 
     override fun execute(execution: Execution) {
-        log.info("Starting execution ${execution.id} on Kubernetes...")
-        updateExecutionRecord(execution.id, ExecutionStatus.IN_PROGRESS)
-
+        log.info("Dispatching execution ${execution.id} to Kubernetes...")
         val jobName = "exec-${execution.id}"
-        var finalStatus = ExecutionStatus.FAILED
-        var finalOutput: String? = null
 
         try {
-            // Define the K8s Job
             val cpuQuantity = Quantity(execution.cpuCount.toString())
 
             val job = JobBuilder()
-                .withNewMetadata().withName(jobName).endMetadata()
+                .withNewMetadata()
+                .withName(jobName)
+                .endMetadata()
                 .withNewSpec()
                 .withBackoffLimit(0)
                 .withTtlSecondsAfterFinished(30)
                 .withNewTemplate()
+                .withNewMetadata()
+                // The informer relies on this label to track the pod
+                .addToLabels("job-name", jobName)
+                .endMetadata()
                 .withNewSpec()
                 .withAutomountServiceAccountToken(false)
                 .addNewContainer()
@@ -47,7 +47,6 @@ class KubernetesExecutorClientImpl(
                 .withImage("alpine:latest")
                 .withCommand("/bin/sh", "-c", execution.script)
                 .withNewResources()
-                // Map user CPU to K8s limits
                 .addToRequests("cpu", cpuQuantity)
                 .addToLimits("cpu", cpuQuantity)
                 .endResources()
@@ -58,49 +57,19 @@ class KubernetesExecutorClientImpl(
                 .endSpec()
                 .build()
 
-            // Submit the Job to the cluster
             kubernetesClient.batch().v1().jobs().inNamespace(namespace).resource(job).create()
-            log.info("Job $jobName created in cluster.")
+            log.info("Job $jobName successfully submitted. Informer will handle lifecycle.")
 
-            // Wait for the Job to finish (Max 5 minutes)
-            val completedJob = kubernetesClient.batch().v1().jobs().inNamespace(namespace).withName(jobName)
-                .waitUntilCondition({ j ->
-                    val succeeded = j?.status?.succeeded ?: 0
-                    val failed = j?.status?.failed ?: 0
-                    succeeded > 0 || failed > 0
-                }, 5, TimeUnit.MINUTES)
-
-            val didSucceed = (completedJob?.status?.succeeded ?: 0) > 0
-            finalStatus = if (didSucceed) ExecutionStatus.FINISHED else ExecutionStatus.FAILED
-
-            // Fetch logs from the Pod associated with this Job
-            val pods = kubernetesClient.pods().inNamespace(namespace).withLabel("job-name", jobName).list().items
-            val podName = pods.firstOrNull()?.metadata?.name
-
-            finalOutput = if (podName != null) {
-                kubernetesClient.pods().inNamespace(namespace).withName(podName).log
-            } else {
-                "Error: Could not find pod to extract logs."
-            }
-
-            log.info("Execution ${execution.id} completed with status $finalStatus")
         } catch (e: Exception) {
-            log.error("System error while running K8s job for execution ${execution.id}", e)
-            finalOutput = "System Error: ${e.message}"
-            finalStatus = ExecutionStatus.FAILED
-        } finally {
-            // Save final state to DB
-            updateExecutionRecord(execution.id, finalStatus, finalOutput?.trim())
-        }
-    }
+            log.error("Failed to submit K8s job for execution ${execution.id}", e)
 
-    private fun updateExecutionRecord(id: java.util.UUID, status: ExecutionStatus, output: String? = null) {
-        executionRepository.findById(id).ifPresent {
-            it.status = status
-            if (output != null) {
-                it.output = output
+            // If the cluster is unreachable, the Informer will never know about this job.
+            // Manually fail it here so it doesn't get stuck in QUEUED forever.
+            executionRepository.findById(execution.id).ifPresent {
+                it.status = ExecutionStatus.FAILED
+                it.output = "Failed to dispatch to Kubernetes: ${e.message}"
+                executionRepository.save(it)
             }
-            executionRepository.save(it)
         }
     }
 }
